@@ -844,7 +844,7 @@
       hud.dmgDir.style.transform = 'translate(-50%, -50%) rotate(' + -ang + 'rad)';
     }
     hud.dmgDir.style.opacity = Math.min(1, dmgDirT);
-    hud.mouseHint.classList.toggle('show', state === 'playing' && !isLocked() && !player.dead);
+    hud.mouseHint.classList.toggle('show', state === 'playing' && !mouseActive() && !player.dead);
   }
 
   function drawMinimap() {
@@ -920,6 +920,7 @@
   window.addEventListener('keyup', (e) => { keys[e.code] = false; });
   window.addEventListener('blur', () => {
     for (const k in keys) keys[k] = false;
+    releaseButtons();
     if (state === 'playing' && !online) togglePause();
   });
   let lastWheel = 0;
@@ -934,40 +935,83 @@
   const MOUSE_BASE = 0.0022;
   const MAX_PITCH = 0.7;
   let mouseSens = 1;
-  let mouseDown = false;
   let lastUnlock = 0;
+  // Buttons: left = fire, right = walk forward, middle = reload,
+  // side buttons (back / forward) = walk backward / forward
+  const mouse = { fire: false, fwd: false, back: false };
+  // Fallback when the browser refuses pointer lock: the visible cursor aims
+  // and pushing it toward the screen edges turns the view (light-gun style).
+  let freeAim = false;
+  const cursor = { x: 0.5, y: 0.5, inside: false };
   const isLocked = () => document.pointerLockElement === canvas;
+  const mouseActive = () => isLocked() || freeAim;
 
   function lockMouse() {
-    if (isLocked() || !canvas.requestPointerLock) return;
+    if (isLocked() || freeAim) return;
+    if (!canvas.requestPointerLock) { enableFreeAim(); return; }
     try {
       const p = canvas.requestPointerLock();
-      if (p && p.catch) p.catch(() => {});   // newer browsers return a promise
-    } catch (e) { /* pointer lock unavailable */ }
+      if (p && p.catch) p.catch(() => enableFreeAim());   // newer browsers return a promise
+    } catch (e) { enableFreeAim(); }
   }
   function releaseMouse() {
     if (document.pointerLockElement) document.exitPointerLock();
   }
+  function enableFreeAim() {
+    if (freeAim) return;
+    freeAim = true;
+    canvas.classList.add('free-aim');
+    if (inGame()) showToast('MOUSE: EDGE-TURN MODE');
+  }
+  const releaseButtons = () => { mouse.fire = mouse.fwd = mouse.back = false; };
 
   canvas.addEventListener('mousedown', (e) => {
     if (!inGame()) return;
-    if (!isLocked()) { lockMouse(); return; }   // first click only captures the mouse
-    if (e.button === 0) mouseDown = true;
-    if (e.button === 2) startReload();
+    e.preventDefault();
+    if (!mouseActive()) { lockMouse(); return; }   // first click only captures the mouse
+    if (e.button === 0) mouse.fire = true;
+    else if (e.button === 2) mouse.fwd = true;
+    else if (e.button === 1) startReload();
+    else if (e.button === 3) mouse.back = true;
+    else if (e.button === 4) mouse.fwd = true;
   });
-  window.addEventListener('mouseup', (e) => { if (e.button === 0) mouseDown = false; });
+  window.addEventListener('mouseup', (e) => {
+    if (e.button === 0) mouse.fire = false;
+    else if (e.button === 2 || e.button === 4) mouse.fwd = false;
+    else if (e.button === 3) mouse.back = false;
+  });
+  // stop the browser's back/forward navigation from the side buttons mid-game
+  window.addEventListener('auxclick', (e) => { if (inGame()) e.preventDefault(); });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   document.addEventListener('mousemove', (e) => {
+    cursor.x = e.clientX / window.innerWidth;
+    cursor.y = e.clientY / window.innerHeight;
     if (!isLocked() || !inGame() || player.dead) return;
     player.yaw -= e.movementX * MOUSE_BASE * mouseSens;
     player.pitch = clamp(player.pitch - e.movementY * MOUSE_BASE * mouseSens, -MAX_PITCH, MAX_PITCH);
   });
+  canvas.addEventListener('mouseenter', () => { cursor.inside = true; });
+  canvas.addEventListener('mouseleave', () => { cursor.inside = false; });
+  document.addEventListener('pointerlockerror', enableFreeAim);
   document.addEventListener('pointerlockchange', () => {
-    mouseDown = false;
+    releaseButtons();
     if (isLocked()) return;
     lastUnlock = performance.now();
     if (state === 'playing' && !online) togglePause();
   });
+
+  // Free-aim mode: turn while the cursor is pushed toward the left/right edge,
+  // and tilt the view to follow the cursor's height.
+  function freeAimTurn(dt) {
+    if (!freeAim || isLocked() || !cursor.inside) return;
+    const dx = (cursor.x - 0.5) * 2;
+    const DEAD = 0.3;
+    if (Math.abs(dx) > DEAD) {
+      player.yaw -= Math.sign(dx) * ((Math.abs(dx) - DEAD) / (1 - DEAD)) * PLAYER_TURN * 1.3 * mouseSens * dt;
+    }
+    const targetPitch = clamp(-(cursor.y - 0.5) * 2 * MAX_PITCH, -MAX_PITCH, MAX_PITCH);
+    player.pitch += (targetPitch - player.pitch) * Math.min(1, dt * 8);
+  }
 
   // ------------------------------------------------------------------
   // Player weapons
@@ -1085,8 +1129,11 @@
 
     const strafeMode = keys.ShiftLeft || keys.ShiftRight;
     let turn = 0, move = 0, strafe = 0;
-    if (keys.ArrowUp) move += 1;
-    if (keys.ArrowDown) move -= 1;
+    if (keys.ArrowUp || keys.KeyW || mouse.fwd) move += 1;
+    if (keys.ArrowDown || keys.KeyS || mouse.back) move -= 1;
+    move = clamp(move, -1, 1);
+    if (keys.KeyA) strafe -= 1;
+    if (keys.KeyD) strafe += 1;
     if (strafeMode) {
       if (keys.ArrowLeft) strafe -= 1;
       if (keys.ArrowRight) strafe += 1;
@@ -1094,7 +1141,9 @@
       if (keys.ArrowLeft) turn += 1;
       if (keys.ArrowRight) turn -= 1;
     }
+    strafe = clamp(strafe, -1, 1);
     player.yaw += turn * PLAYER_TURN * dt;
+    freeAimTurn(dt);
 
     const f = forward(player.yaw);
     const r = { x: -f.z, z: f.x };            // right vector
@@ -1110,7 +1159,7 @@
     collide(player.pos, PLAYER_R);
     separate();
 
-    if (keys.Space || mouseDown) playerShoot();
+    if (keys.Space || mouse.fire) playerShoot();
 
     pickups.forEach((p, i) => {
       if (!p.active || Math.hypot(player.pos.x - p.x, player.pos.z - p.z) >= 1.3) return;

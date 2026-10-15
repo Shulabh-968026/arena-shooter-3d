@@ -18,20 +18,28 @@ Nothing to install. Works in any modern desktop browser (Chrome, Edge, Firefox, 
 
 ### Controls
 
-| Key | Action |
+The game can be played **mouse-only**, **keyboard-only**, or the classic FPS way (**WASD + mouse**, like IGI).
+
+| Input | Action |
 |---|---|
-| `↑` / `↓` | Move forward / back |
+| Mouse | Aim and turn: look left/right and up/down (click the game to capture the mouse) |
+| Left click | Shoot (hold for rapid fire) |
+| Right click (hold) | Walk forward in the direction you're aiming |
+| Middle click | Reload |
+| Mouse side buttons | Walk backward / forward |
+| `W` / `S` or `↑` / `↓` | Move forward / back |
+| `A` / `D` | Strafe left / right |
 | `←` / `→` | Turn left / right |
-| `Space` | Shoot (hold for rapid fire) |
-| Mouse | Aim: look left/right and up/down (click the game to capture the mouse) |
-| Left / right click | Shoot / reload |
+| `Space` | Shoot (keyboard) |
 | `Shift` + `←` / `→` | Strafe sideways |
 | `1` – `4` | Select weapon |
 | `Q` / `E` or mouse wheel | Previous / next weapon |
 | `R` | Reload |
 | `P` / `Esc` | Pause (VS Bot only). `Esc` also releases the mouse |
 
-You can play keyboard-only (classic arrow keys + space) or use the mouse for aiming. Both work at the same time. Mouse sensitivity can be adjusted on the main menu and is remembered.
+All controls work at the same time, so mix them however you like. Mouse sensitivity can be adjusted on the main menu and is remembered.
+
+If your browser doesn't allow the game to capture the mouse, it switches to **edge-turn mode** automatically: the cursor stays visible, the view tilts to follow it, and pushing it toward the left or right edge of the screen turns you (like a light-gun game such as Virtua Cop).
 
 ### Weapons
 

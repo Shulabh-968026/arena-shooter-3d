@@ -244,6 +244,8 @@ h3 { font-family: 'Orbitron', sans-serif; font-size: 1rem; letter-spacing: 0.12e
 .sens input { flex: 1; accent-color: var(--cyan); cursor: pointer; }
 .sens span { min-width: 38px; text-align: right; font: 700 0.85rem 'Orbitron', sans-serif; color: var(--cyan); }
 
+canvas.free-aim { cursor: crosshair; }
+
 #mouseHint {
   position: absolute;
   top: calc(50% + 40px);
