@@ -48,6 +48,7 @@
     <div id="weaponBar"></div>
 
     <div id="message"></div>
+    <div id="mouseHint">🖱 Click to aim with the mouse</div>
   </div>
 
   <!-- Main menu -->
@@ -124,11 +125,19 @@
           <div><kbd>↑</kbd><kbd>↓</kbd><span>Move forward / back</span></div>
           <div><kbd>←</kbd><kbd>→</kbd><span>Turn left / right</span></div>
           <div><kbd class="wide">SPACE</kbd><span>Shoot (hold for rapid fire)</span></div>
+          <div><kbd class="wide">MOUSE</kbd><span>Aim (click game to capture)</span></div>
+          <div><kbd>LMB</kbd><kbd>RMB</kbd><span>Shoot / reload</span></div>
           <div><kbd>Shift</kbd>+<kbd>←</kbd><kbd>→</kbd><span>Strafe</span></div>
           <div><kbd>1</kbd>–<kbd>4</kbd><span>Select weapon</span></div>
           <div><kbd>Q</kbd><kbd>E</kbd><span>Prev / next weapon (or wheel)</span></div>
           <div><kbd>R</kbd><span>Reload</span></div>
           <div><kbd>P</kbd><span>Pause (bot mode)</span></div>
+        </div>
+
+        <div class="sens">
+          <label for="mouseSens">Mouse sensitivity</label>
+          <input type="range" id="mouseSens" min="0.2" max="3" step="0.1" value="1">
+          <span id="sensVal">1.0×</span>
         </div>
 
         <p class="label">Arsenal</p>

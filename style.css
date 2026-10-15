@@ -230,6 +230,38 @@ h3 { font-family: 'Orbitron', sans-serif; font-size: 1rem; letter-spacing: 0.12e
 .hist-empty { padding: 24px 12px; text-align: center; color: var(--muted); }
 #clearHist { max-width: 200px; padding: 8px 14px; font-size: 0.75rem; }
 
+/* Mouse */
+.sens {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: -8px 0 18px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.sens label { color: var(--muted); font-weight: 700; white-space: nowrap; }
+.sens input { flex: 1; accent-color: var(--cyan); cursor: pointer; }
+.sens span { min-width: 38px; text-align: right; font: 700 0.85rem 'Orbitron', sans-serif; color: var(--cyan); }
+
+#mouseHint {
+  position: absolute;
+  top: calc(50% + 40px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+#mouseHint.show { opacity: 0.85; }
+
 /* Leaderboard */
 .lb-filter { display: flex; gap: 6px; margin-bottom: 10px; }
 .lb-filter button {

@@ -23,11 +23,15 @@ Nothing to install. Works in any modern desktop browser (Chrome, Edge, Firefox, 
 | `↑` / `↓` | Move forward / back |
 | `←` / `→` | Turn left / right |
 | `Space` | Shoot (hold for rapid fire) |
+| Mouse | Aim: look left/right and up/down (click the game to capture the mouse) |
+| Left / right click | Shoot / reload |
 | `Shift` + `←` / `→` | Strafe sideways |
 | `1` – `4` | Select weapon |
 | `Q` / `E` or mouse wheel | Previous / next weapon |
 | `R` | Reload |
-| `P` / `Esc` | Pause (VS Bot only) |
+| `P` / `Esc` | Pause (VS Bot only). `Esc` also releases the mouse |
+
+You can play keyboard-only (classic arrow keys + space) or use the mouse for aiming. Both work at the same time. Mouse sensitivity can be adjusted on the main menu and is remembered.
 
 ### Weapons
 

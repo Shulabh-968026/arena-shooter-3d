@@ -129,7 +129,7 @@
       strip.position.set(x, h - 0.25, z);
       scene.add(strip);
     }
-    obstacles.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2 });
+    obstacles.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, h });
   }
 
   // Outer walls
@@ -205,6 +205,17 @@
     for (const b of obstacles) {
       const t = segBox(ax, az, bx, bz, b);
       if (t !== null && (best === null || t < best)) best = t;
+    }
+    return best;
+  }
+
+  // Like rayObstacles, but for a segment with height: ignores boxes the
+  // segment passes over (used for bullets now that the player can aim up/down).
+  function rayObstaclesY(ax, ay, az, bx, by, bz) {
+    let best = null;
+    for (const b of obstacles) {
+      const t = segBox(ax, az, bx, bz, b);
+      if (t !== null && ay + (by - ay) * t <= b.h && (best === null || t < best)) best = t;
     }
     return best;
   }
@@ -715,7 +726,7 @@
   const freshAmmo = () => WEAPONS.map((w) => ({ mag: w.mag, reserve: w.reserve }));
 
   const player = {
-    pos: new THREE.Vector3(), yaw: 0, hp: 100,
+    pos: new THREE.Vector3(), yaw: 0, pitch: 0, hp: 100,
     weapon: 0, ammo: freshAmmo(), reload: 0, cool: 0, switchT: 0,
     bob: 0, recoil: 0, dead: false, deathT: 0,
   };
@@ -751,7 +762,7 @@
     pHealth: $('playerHealth'), hpText: $('hpText'), eHealth: $('enemyHealth'),
     ammo: $('ammo'), reserve: $('reserve'), wname: $('weaponName'), warn: $('ammoWarn'),
     reloadWrap: $('reloadWrap'), reloadBar: $('reloadBar'),
-    msg: $('message'), toast: $('toast'), feed: $('killfeed'),
+    msg: $('message'), toast: $('toast'), feed: $('killfeed'), mouseHint: $('mouseHint'),
     scoreP: $('scoreP'), scoreE: $('scoreE'), round: $('roundNum'),
   };
   const mini = $('minimap').getContext('2d');
@@ -833,6 +844,7 @@
       hud.dmgDir.style.transform = 'translate(-50%, -50%) rotate(' + -ang + 'rad)';
     }
     hud.dmgDir.style.opacity = Math.min(1, dmgDirT);
+    hud.mouseHint.classList.toggle('show', state === 'playing' && !isLocked() && !player.dead);
   }
 
   function drawMinimap() {
@@ -895,7 +907,8 @@
     if (GAME_KEYS.includes(e.code)) e.preventDefault();
     keys[e.code] = true;
     if (e.repeat) return;
-    if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
+    // Esc that just released the mouse already paused the game – don't unpause it again
+    if (e.code === 'KeyP' || (e.code === 'Escape' && performance.now() - lastUnlock > 300)) togglePause();
     if (e.code === 'Enter' && state === 'menu' && menuMode === 'bot') startGame();
     if (!inGame()) return;
     if (e.code === 'KeyR') startReload();
@@ -915,6 +928,46 @@
     lastWheel = performance.now();
     cycleWeapon(e.deltaY > 0 ? 1 : -1);
   }, { passive: true });
+
+  // Mouse: click the game to capture the pointer, move to aim, left-click to shoot
+  const canvas = renderer.domElement;
+  const MOUSE_BASE = 0.0022;
+  const MAX_PITCH = 0.7;
+  let mouseSens = 1;
+  let mouseDown = false;
+  let lastUnlock = 0;
+  const isLocked = () => document.pointerLockElement === canvas;
+
+  function lockMouse() {
+    if (isLocked() || !canvas.requestPointerLock) return;
+    try {
+      const p = canvas.requestPointerLock();
+      if (p && p.catch) p.catch(() => {});   // newer browsers return a promise
+    } catch (e) { /* pointer lock unavailable */ }
+  }
+  function releaseMouse() {
+    if (document.pointerLockElement) document.exitPointerLock();
+  }
+
+  canvas.addEventListener('mousedown', (e) => {
+    if (!inGame()) return;
+    if (!isLocked()) { lockMouse(); return; }   // first click only captures the mouse
+    if (e.button === 0) mouseDown = true;
+    if (e.button === 2) startReload();
+  });
+  window.addEventListener('mouseup', (e) => { if (e.button === 0) mouseDown = false; });
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+  document.addEventListener('mousemove', (e) => {
+    if (!isLocked() || !inGame() || player.dead) return;
+    player.yaw -= e.movementX * MOUSE_BASE * mouseSens;
+    player.pitch = clamp(player.pitch - e.movementY * MOUSE_BASE * mouseSens, -MAX_PITCH, MAX_PITCH);
+  });
+  document.addEventListener('pointerlockchange', () => {
+    mouseDown = false;
+    if (isLocked()) return;
+    lastUnlock = performance.now();
+    if (state === 'playing' && !online) togglePause();
+  });
 
   // ------------------------------------------------------------------
   // Player weapons
@@ -978,7 +1031,8 @@
       const dirs = [];
       for (let i = 0; i < w.pellets; i++) {
         const d = forward(player.yaw + rand(-1, 1) * w.spread);
-        const dir = new THREE.Vector3(d.x, rand(-1, 1) * w.spread * 0.3, d.z).normalize();
+        const p = player.pitch + rand(-1, 1) * w.spread * 0.3;
+        const dir = new THREE.Vector3(d.x * Math.cos(p), Math.sin(p), d.z * Math.cos(p));
         spawnBullet(origin, dir, w.speed, 'player', w.dmg, w.life, playerBulletMats[player.weapon], w.name);
         dirs.push(v3(dir, 3));
       }
@@ -994,15 +1048,18 @@
   function fireRail(origin, w) {
     const f = forward(player.yaw);
     const far = 120;
-    const ex = origin.x + f.x * far, ez = origin.z + f.z * far;
-    let t = rayObstacles(origin.x, origin.z, ex, ez);
+    const cp = Math.cos(player.pitch), sp = Math.sin(player.pitch);
+    const ex = origin.x + f.x * cp * far, ey = origin.y + sp * far, ez = origin.z + f.z * cp * far;
+    const yAt = (s) => origin.y + (ey - origin.y) * s;
+    let t = rayObstaclesY(origin.x, origin.y, origin.z, ex, ey, ez);
     if (t === null) t = 1;
+    if (ey < 0) t = Math.min(t, origin.y / (origin.y - ey));   // floor
     let hitEnemy = false;
     if (!enemy.dead) {
       const te = segCircleT(origin.x, origin.z, ex, ez, enemy.pos.x, enemy.pos.z, ENEMY_R);
-      if (te !== null && te < t) { t = te; hitEnemy = true; }
+      if (te !== null && te < t && yAt(te) > 0 && yAt(te) < 2.05) { t = te; hitEnemy = true; }
     }
-    const end = new THREE.Vector3(origin.x + f.x * far * t, origin.y, origin.z + f.z * far * t);
+    const end = new THREE.Vector3(origin.x + (ex - origin.x) * t, yAt(t), origin.z + (ez - origin.z) * t);
     // start the beam near the weapon, slightly right and below eye level
     const start = new THREE.Vector3(origin.x - f.z * 0.25, origin.y - 0.15, origin.z + f.x * 0.25);
     beam(start, end, w.color);
@@ -1053,7 +1110,7 @@
     collide(player.pos, PLAYER_R);
     separate();
 
-    if (keys.Space) playerShoot();
+    if (keys.Space || mouseDown) playerShoot();
 
     pickups.forEach((p, i) => {
       if (!p.active || Math.hypot(player.pos.x - p.x, player.pos.z - p.z) >= 1.3) return;
@@ -1260,15 +1317,17 @@
       const ax = b.pos.x, az = b.pos.z;
       const nx = ax + b.vel.x * dt, ny = b.pos.y + b.vel.y * dt, nz = az + b.vel.z * dt;
 
-      let hitT = rayObstacles(ax, az, nx, nz);
+      const ay = b.pos.y;
+      const inBody = (t) => { const y = ay + (ny - ay) * t; return y > 0 && y < 2.05; };
+      let hitT = rayObstaclesY(ax, ay, az, nx, ny, nz);
       let hitWhat = hitT !== null ? 'wall' : null;
 
       if (b.owner === 'player' && !enemy.dead) {
         const t = segCircleT(ax, az, nx, nz, enemy.pos.x, enemy.pos.z, ENEMY_R);
-        if (t !== null && (hitT === null || t < hitT)) { hitT = t; hitWhat = 'enemy'; }
+        if (t !== null && inBody(t) && (hitT === null || t < hitT)) { hitT = t; hitWhat = 'enemy'; }
       } else if (b.owner !== 'player' && !player.dead) {
         const t = segCircleT(ax, az, nx, nz, player.pos.x, player.pos.z, PLAYER_R);
-        if (t !== null && (hitT === null || t < hitT)) { hitT = t; hitWhat = 'player'; }
+        if (t !== null && inBody(t) && (hitT === null || t < hitT)) { hitT = t; hitWhat = 'player'; }
       }
 
       if (hitWhat) {
@@ -1289,7 +1348,8 @@
 
       b.pos.set(nx, ny, nz);
       b.mesh.position.copy(b.pos);
-      if (b.life <= 0 || ny < 0 || ny > 6) {
+      if (b.life <= 0 || ny < 0 || ny > 12) {
+        if (ny < 0) sparks(new THREE.Vector3(nx, 0.05, nz), b.mesh.material.color.getHex(), 5, 3);
         scene.remove(b.mesh);
         bullets.splice(i, 1);
       }
@@ -1382,7 +1442,7 @@
     player.pos.set(rand(-6, 6), 0, 26 * side);
     player.yaw = side === 1 ? 0 : Math.PI;
     Object.assign(player, {
-      hp: 100, ammo: freshAmmo(), reload: 0, cool: 0.3, switchT: 0, recoil: 0, dead: false, deathT: 0,
+      pitch: 0, hp: 100, ammo: freshAmmo(), reload: 0, cool: 0.3, switchT: 0, recoil: 0, dead: false, deathT: 0,
     });
     equip(player.weapon);
 
@@ -1424,6 +1484,7 @@
     round = 1;
     score = { player: 0, bot: 0 };
     startRound();
+    lockMouse();   // started by a click/keypress, so the browser allows capturing the mouse
   }
 
   function startRound() {
@@ -1445,6 +1506,7 @@
   function finishRound() {
     if (score.player >= WIN_SCORE || score.bot >= WIN_SCORE) {
       state = 'gameOver';
+      releaseMouse();
       hud.root.classList.add('hidden');
       const won = score.player > score.bot;
       $('goTitle').textContent = won ? 'VICTORY' : 'DEFEAT';
@@ -1480,6 +1542,7 @@
     }
     if (state === 'playing') {
       state = 'paused';
+      releaseMouse();
       $('pause').classList.remove('hidden');
     } else if (state === 'paused') {
       state = 'playing';
@@ -1488,6 +1551,7 @@
   }
 
   function toMenu() {
+    releaseMouse();
     leaveOnline();
     state = 'menu';
     clearProjectiles();
@@ -1720,7 +1784,18 @@
     $('againBtn').disabled = true;
     $('againBtn').textContent = 'Waiting for host…';
   });
-  $('resumeBtn').addEventListener('click', togglePause);
+  $('resumeBtn').addEventListener('click', () => { togglePause(); lockMouse(); });
+
+  const SENS_KEY = 'arenaDuel.mouseSens';
+  const showSens = () => { $('sensVal').textContent = mouseSens.toFixed(1) + '×'; };
+  mouseSens = clamp(+storeGet(SENS_KEY, 1) || 1, 0.2, 3);
+  $('mouseSens').value = mouseSens;
+  showSens();
+  $('mouseSens').addEventListener('input', () => {
+    mouseSens = clamp(+$('mouseSens').value || 1, 0.2, 3);
+    storeSet(SENS_KEY, mouseSens);
+    showSens();
+  });
   $('quitBtn').addEventListener('click', toMenu);
   $('menuBtn').addEventListener('click', toMenu);
 
@@ -1747,7 +1822,7 @@
     const sx = shake > 0 ? rand(-1, 1) * shake * 0.15 : 0;
     const sy = shake > 0 ? rand(-1, 1) * shake * 0.15 : 0;
     camera.position.set(player.pos.x + sx, y + sy, player.pos.z);
-    camera.rotation.set(-player.recoil * 0.02, player.yaw, roll, 'YXZ');
+    camera.rotation.set(player.pitch - player.recoil * 0.02, player.yaw, roll, 'YXZ');
 
     // weapon sway / recoil / reload dip / switch raise
     player.recoil = Math.max(0, player.recoil - dt * 6);
