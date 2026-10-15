@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Arena Duel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="game"></div>
+
+  <!-- In-game HUD -->
+  <div id="hud" class="hidden">
+    <div id="damage"></div>
+    <div id="dmgDir"></div>
+    <div id="crosshair"><span></span><span></span><span></span><span></span><i></i></div>
+    <div id="hitmarker"></div>
+    <div id="killfeed"></div>
+
+    <div class="hud-top">
+      <div class="scoreline">
+        <span class="you"><span id="youLabel">YOU</span> <b id="scoreP">0</b></span>
+        <span class="round">ROUND <b id="roundNum">1</b></span>
+        <span class="bot"><b id="scoreE">0</b> <span id="oppLabel">BOT</span></span>
+      </div>
+      <div class="bar enemy"><div id="enemyHealth"></div></div>
+    </div>
+
+    <canvas id="minimap" width="170" height="170"></canvas>
+
+    <div class="hud-bl">
+      <label>HEALTH</label>
+      <div class="bar player"><div id="playerHealth"></div></div>
+      <span id="hpText">100</span>
+    </div>
+
+    <div class="hud-br">
+      <div id="weaponName">Pistol</div>
+      <div><span id="ammo">12</span><span class="slash"> / <span id="reserve">∞</span></span></div>
+      <div id="reloadWrap" class="reload-bar"><div id="reloadBar"></div></div>
+      <div id="ammoWarn"></div>
+    </div>
+
+    <div id="toast"></div>
+    <div id="weaponBar"></div>
+
+    <div id="message"></div>
+  </div>
+
+  <!-- Main menu -->
+  <div id="menu" class="screen">
+    <div class="card menu-card">
+      <div class="menu-main">
+        <p class="eyebrow">1 v 1 · First to 5</p>
+        <h1>ARENA DUEL</h1>
+        <p class="tagline">Step into the neon arena and take down your opponent before they take you down.</p>
+
+        <div class="name-field">
+          <label for="playerName" class="label">Your Callsign</label>
+          <input id="playerName" maxlength="16" placeholder="Enter your name" autocomplete="off" spellcheck="false">
+          <p id="nameError" class="field-error"></p>
+        </div>
+
+        <div class="mode-tabs" id="modeTabs">
+          <button data-mode="bot" class="active">VS Bot</button>
+          <button data-mode="online">Online 1v1</button>
+        </div>
+
+        <div id="botPanel">
+          <p class="label">Difficulty</p>
+          <div class="diff" id="diff">
+            <button data-diff="easy">Easy</button>
+            <button data-diff="normal" class="active">Normal</button>
+            <button data-diff="hard">Hard</button>
+          </div>
+          <button id="startBtn" class="primary">Enter Arena</button>
+        </div>
+
+        <div id="onlinePanel" class="hidden">
+          <div class="online-grid">
+            <div class="online-box">
+              <h3>Host</h3>
+              <p>Create a room and send the code to a friend.</p>
+              <button id="hostBtn" class="primary">Create Room</button>
+              <button id="roomCode" class="room-code hidden" title="Click to copy"></button>
+            </div>
+            <div class="online-box">
+              <h3>Join</h3>
+              <p>Enter the room code your friend shared.</p>
+              <input id="joinCode" maxlength="5" placeholder="CODE" autocomplete="off" spellcheck="false">
+              <button id="joinBtn" class="primary">Join Room</button>
+            </div>
+          </div>
+          <p id="netStatus" class="net-status"></p>
+        </div>
+
+        <p class="hint">Use the pillars for cover. Grab green medkits to heal and yellow crates to restock ammo.</p>
+      </div>
+
+      <div class="menu-side">
+        <div class="side-tabs" id="sideTabs">
+          <button data-tab="controls" class="active">Controls</button>
+          <button data-tab="leaderboard">Leaderboard</button>
+          <button data-tab="history">History</button>
+        </div>
+
+        <div id="tab-leaderboard" class="hidden">
+          <div class="lb-filter" id="lbFilter">
+            <button data-f="all" class="active">All</button>
+            <button data-f="bot">Vs Bot</button>
+            <button data-f="online">Online</button>
+          </div>
+          <div class="lb-head"><span>#</span><span>Player</span><span>W – L</span><span>Win %</span><span>Played</span></div>
+          <ol class="lb" id="lbList"></ol>
+          <p class="lb-note">Ranked by wins, then win rate. Built from matches played on this device.</p>
+        </div>
+
+        <div id="tab-controls">
+        <p class="label">Controls</p>
+        <div class="controls">
+          <div><kbd>↑</kbd><kbd>↓</kbd><span>Move forward / back</span></div>
+          <div><kbd>←</kbd><kbd>→</kbd><span>Turn left / right</span></div>
+          <div><kbd class="wide">SPACE</kbd><span>Shoot (hold for rapid fire)</span></div>
+          <div><kbd>Shift</kbd>+<kbd>←</kbd><kbd>→</kbd><span>Strafe</span></div>
+          <div><kbd>1</kbd>–<kbd>4</kbd><span>Select weapon</span></div>
+          <div><kbd>Q</kbd><kbd>E</kbd><span>Prev / next weapon (or wheel)</span></div>
+          <div><kbd>R</kbd><span>Reload</span></div>
+          <div><kbd>P</kbd><span>Pause (bot mode)</span></div>
+        </div>
+
+        <p class="label">Arsenal</p>
+        <div class="arsenal">
+          <div><b>Pistol</b><span>Reliable · unlimited ammo</span></div>
+          <div><b>Assault Rifle</b><span>Rapid fire · low damage</span></div>
+          <div><b>Shotgun</b><span>8 pellets · short range</span></div>
+          <div><b>Railgun</b><span>Instant beam · huge damage</span></div>
+        </div>
+        </div>
+
+        <div id="tab-history" class="hidden">
+          <div class="hist-summary" id="histSummary"></div>
+          <ol class="hist-list" id="histList"></ol>
+          <button id="clearHist" class="ghost">Clear History</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pause -->
+  <div id="pause" class="screen hidden">
+    <div class="card small">
+      <h2>PAUSED</h2>
+      <button id="resumeBtn" class="primary">Resume</button>
+      <button id="quitBtn" class="ghost">Quit to Menu</button>
+    </div>
+  </div>
+
+  <!-- Game over -->
+  <div id="gameover" class="screen hidden">
+    <div class="card small">
+      <h2 id="goTitle">VICTORY</h2>
+      <p id="goScore" class="big"></p>
+      <div class="stats" id="goStats"></div>
+      <p id="goRecord" class="record"></p>
+      <button id="againBtn" class="primary">Play Again</button>
+      <button id="menuBtn" class="ghost">Main Menu</button>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
